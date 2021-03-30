@@ -90,6 +90,7 @@ func main() {
 	}
 
 	prompt := promptui.Select{
+		Size:  20,
 		Label: "选择机器",
 	}
 	var items []string
