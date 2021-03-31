@@ -2,13 +2,16 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/kevinburke/ssh_config"
@@ -142,10 +145,6 @@ func connectServer(host Host) error {
 	}
 	defer session.Close()
 
-	session.Stdout = os.Stdout
-	session.Stderr = os.Stderr
-	session.Stdin = os.Stdin
-
 	term := os.Getenv("TERM")
 	if term == "" {
 		term = "xterm-256color"
@@ -158,35 +157,104 @@ func connectServer(host Host) error {
 	}
 	defer terminal.Restore(fd, state)
 
-	w, h, err := terminal.GetSize(fd)
+	termWidth, termHeight, err := terminal.GetSize(fd)
 	if err != nil {
 		return err
 	}
-	if err = session.RequestPty(term, h, w, ssh.TerminalModes{
+	if err = session.RequestPty(term, termHeight, termWidth, ssh.TerminalModes{
 		ssh.ECHO: 1,
 	}); err != nil {
 		return err
 	}
 
-	exist := make(chan struct{})
-	defer func() {
-		exist <- struct{}{}
-	}()
-	go func() {
-		for {
-			select {
-			case <-exist:
-				break
-			default:
-				_, _ = session.SendRequest("print", false, nil)
-			}
-			time.Sleep(time.Second)
-		}
-	}()
+	go watchWinch(session)
+
+	existCh := make(chan struct{})
+	ping(session, existCh)
+	defer close(existCh)
+
+	stdoutPiper, err := session.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	stderrPiper, err := session.StderrPipe()
+	if err != nil {
+		return err
+	}
+
+	go io.Copy(os.Stderr, stderrPiper)
+	go io.Copy(os.Stdout, stdoutPiper)
+	go readStdin(session)
 
 	if err = session.Shell(); err != nil {
 		return err
 	}
 	_ = session.Wait()
 	return nil
+}
+
+func watchWinch(session *ssh.Session) error {
+	// 监听窗口变更事件
+	sigwinchCh := make(chan os.Signal, 1)
+	signal.Notify(sigwinchCh, syscall.SIGWINCH)
+
+	fd := int(os.Stdin.Fd())
+	termWidth, termHeight, err := terminal.GetSize(fd)
+	if err != nil {
+		return err
+	}
+
+	for {
+		select {
+		case sigwinch := <-sigwinchCh:
+			if sigwinch == nil {
+				return nil
+			}
+			currTermWidth, currTermHeight, err := terminal.GetSize(fd)
+
+			// 判断一下窗口尺寸是否有改变
+			if currTermHeight == termHeight && currTermWidth == termWidth {
+				continue
+			}
+			// 更新远端大小
+			_ = session.WindowChange(currTermHeight, currTermWidth)
+			if err != nil {
+				continue
+			}
+			termWidth, termHeight = currTermWidth, currTermHeight
+		}
+	}
+}
+
+func ping(session *ssh.Session, ch chan struct{}) {
+	go func() {
+		for {
+			select {
+			case <-ch:
+				break
+			default:
+				_, _ = session.SendRequest("print", false, nil)
+				time.Sleep(time.Second)
+			}
+		}
+	}()
+}
+
+func readStdin(session *ssh.Session) error {
+	stdinPiper, err := session.StdinPipe()
+	if err != nil {
+		return err
+	}
+	buf := make([]byte, 128)
+	for {
+		n, err := os.Stdin.Read(buf)
+		if err != nil {
+			panic(err)
+		}
+		if n > 0 {
+			if _, err := stdinPiper.Write(buf[:n]); err != nil {
+				return err
+			}
+		}
+	}
 }
