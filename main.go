@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -27,6 +28,12 @@ type Host struct {
 	Port         int    `json:"port"`
 	IdentityFile string `json:"identity_file"`
 	Comment      string `json:"comment"`
+}
+
+type Session struct {
+	*ssh.Session
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 var clear map[string]func()
@@ -167,11 +174,14 @@ func connectServer(host Host) error {
 		return err
 	}
 
-	go watchWinch(session)
-
-	existCh := make(chan struct{})
-	ping(session, existCh)
-	defer close(existCh)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	s := Session{
+		Session: session,
+		ctx:     ctx,
+	}
+	go s.watchWinch()
+	go s.ping()
 
 	stdoutPiper, err := session.StdoutPipe()
 	if err != nil {
@@ -184,7 +194,7 @@ func connectServer(host Host) error {
 
 	go io.Copy(os.Stderr, stderrPiper)
 	go io.Copy(os.Stdout, stdoutPiper)
-	go readStdin(session)
+	go s.readStdin()
 
 	if err = session.Shell(); err != nil {
 		return err
@@ -193,7 +203,7 @@ func connectServer(host Host) error {
 	return nil
 }
 
-func watchWinch(session *ssh.Session) error {
+func (s *Session) watchWinch() error {
 	// 监听窗口变更事件
 	sigwinchCh := make(chan os.Signal, 1)
 	signal.Notify(sigwinchCh, syscall.SIGWINCH)
@@ -206,6 +216,8 @@ func watchWinch(session *ssh.Session) error {
 
 	for {
 		select {
+		case <-s.ctx.Done():
+			return nil
 		case sigwinch := <-sigwinchCh:
 			if sigwinch == nil {
 				return nil
@@ -217,7 +229,7 @@ func watchWinch(session *ssh.Session) error {
 				continue
 			}
 			// 更新远端大小
-			_ = session.WindowChange(currTermHeight, currTermWidth)
+			_ = s.WindowChange(currTermHeight, currTermWidth)
 			if err != nil {
 				continue
 			}
@@ -226,34 +238,37 @@ func watchWinch(session *ssh.Session) error {
 	}
 }
 
-func ping(session *ssh.Session, ch chan struct{}) {
-	go func() {
-		for {
-			select {
-			case <-ch:
-				break
-			default:
-				_, _ = session.SendRequest("print", false, nil)
-				time.Sleep(time.Second)
-			}
+func (s *Session) ping() {
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		default:
+			_, _ = s.SendRequest("print", false, nil)
+			time.Sleep(time.Second)
 		}
-	}()
+	}
 }
 
-func readStdin(session *ssh.Session) error {
-	stdinPiper, err := session.StdinPipe()
+func (s *Session) readStdin() error {
+	stdinPiper, err := s.StdinPipe()
 	if err != nil {
 		return err
 	}
 	buf := make([]byte, 128)
 	for {
-		n, err := os.Stdin.Read(buf)
-		if err != nil {
-			panic(err)
-		}
-		if n > 0 {
-			if _, err := stdinPiper.Write(buf[:n]); err != nil {
-				return err
+		select {
+		case <-s.ctx.Done():
+			return nil
+		default:
+			n, err := os.Stdin.Read(buf)
+			if err != nil {
+				panic(err)
+			}
+			if n > 0 {
+				if _, err := stdinPiper.Write(buf[:n]); err != nil {
+					return err
+				}
 			}
 		}
 	}
