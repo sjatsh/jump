@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/hnakamur/go-scp"
 	"github.com/kevinburke/ssh_config"
 	"github.com/manifoldco/promptui"
 	"golang.org/x/crypto/ssh"
@@ -32,9 +33,10 @@ type Host struct {
 }
 
 type Session struct {
-	*ssh.Session
-	ctx    context.Context
-	cancel context.CancelFunc
+	session *ssh.Session
+	client  *ssh.Client
+	ctx     context.Context
+	cancel  context.CancelFunc
 }
 
 var clear map[string]func()
@@ -178,7 +180,8 @@ func connectServer(host Host) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	s := Session{
-		Session: session,
+		session: session,
+		client:  client,
 		ctx:     ctx,
 	}
 	go s.watchWinch()
@@ -222,7 +225,7 @@ func (s *Session) watchWinch() error {
 			if currTermHeight == termHeight && currTermWidth == termWidth {
 				continue
 			}
-			_ = s.WindowChange(currTermHeight, currTermWidth)
+			_ = s.session.WindowChange(currTermHeight, currTermWidth)
 			if err != nil {
 				continue
 			}
@@ -237,18 +240,19 @@ func (s *Session) ping() {
 		case <-s.ctx.Done():
 			return
 		default:
-			_, _ = s.SendRequest("print", false, nil)
+			_, _ = s.session.SendRequest("print", false, nil)
 			time.Sleep(time.Second)
 		}
 	}
 }
 
 func (s *Session) writePiperStdin() error {
-	stdinPiper, err := s.StdinPipe()
+	stdinPiper, err := s.session.StdinPipe()
 	if err != nil {
 		return err
 	}
 	buf := make([]byte, 128)
+	cmdBuf := make([]byte, 0, 128)
 	for {
 		select {
 		case <-s.ctx.Done():
@@ -262,19 +266,34 @@ func (s *Session) writePiperStdin() error {
 				if _, err := stdinPiper.Write(buf[:n]); err != nil {
 					return err
 				}
+				idx := bytes.IndexFunc(buf[:n], func(r rune) bool {
+					if r == '\r' || r == '\n' {
+						return true
+					}
+					return false
+				})
+				if idx == -1 {
+					cmdBuf = append(cmdBuf, buf[:n]...)
+					continue
+				}
+				cmdBuf = append(cmdBuf, buf[:idx+1]...)
+				cmdStr := strings.TrimSpace(string(cmdBuf))
+				cmdBuf = make([]byte, 0, 128)
+				if err := s.runCmd(cmdStr); err != nil {
+					return err
+				}
 			}
 		}
 	}
 }
 
 func (s *Session) readPiperStdout() error {
-	stdoutPiper, err := s.StdoutPipe()
+	stdoutPiper, err := s.session.StdoutPipe()
 	if err != nil {
 		return err
 	}
 
 	buf := make([]byte, 128)
-	cmdBuf := make([]byte, 0, 128)
 	for {
 		select {
 		case <-s.ctx.Done():
@@ -288,21 +307,34 @@ func (s *Session) readPiperStdout() error {
 				if _, err := os.Stdout.Write(buf[:n]); err != nil {
 					return err
 				}
-
-				idx := bytes.IndexFunc(buf[:n], func(r rune) bool {
-					if r == '\r' || r == '\n' {
-						return true
-					}
-					return false
-				})
-				if idx == -1 {
-					cmdBuf = append(cmdBuf, buf[:n]...)
-				} else {
-					cmdBuf = append(cmdBuf, buf[:idx+1]...)
-					// os.Stdout.Write(cmdBuf)
-					cmdBuf = make([]byte, 0, 128)
-				}
 			}
 		}
 	}
+}
+
+func (s *Session) runCmd(cmdStr string) error {
+	cmdParams := strings.Split(cmdStr, " ")
+	if len(cmdParams) == 0 {
+		return nil
+	}
+
+	cmd := cmdParams[0]
+	switch cmd {
+	case "down":
+		if len(cmdParams) < 2 {
+			return nil
+		}
+		fileName := filepath.Base(cmdParams[1])
+		localPath := "."
+		if len(cmdParams) >= 3 {
+			localPath = cmdParams[2]
+		}
+		localPath = filepath.Join(localPath, fileName)
+		if err := scp.NewSCP(s.client).ReceiveFile(cmdParams[1], localPath); err != nil {
+			return err
+		}
+	default:
+		return nil
+	}
+	return nil
 }
