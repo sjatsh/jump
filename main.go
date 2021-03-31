@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -183,18 +184,13 @@ func connectServer(host Host) error {
 	go s.watchWinch()
 	go s.ping()
 
-	stdoutPiper, err := session.StdoutPipe()
-	if err != nil {
-		return err
-	}
 	stderrPiper, err := session.StderrPipe()
 	if err != nil {
 		return err
 	}
-
 	go io.Copy(os.Stderr, stderrPiper)
-	go io.Copy(os.Stdout, stdoutPiper)
-	go s.readStdin()
+	go s.writePiperStdin()
+	go s.readPiperStdout()
 
 	if err = session.Shell(); err != nil {
 		return err
@@ -247,7 +243,7 @@ func (s *Session) ping() {
 	}
 }
 
-func (s *Session) readStdin() error {
+func (s *Session) writePiperStdin() error {
 	stdinPiper, err := s.StdinPipe()
 	if err != nil {
 		return err
@@ -265,6 +261,46 @@ func (s *Session) readStdin() error {
 			if n > 0 {
 				if _, err := stdinPiper.Write(buf[:n]); err != nil {
 					return err
+				}
+			}
+		}
+	}
+}
+
+func (s *Session) readPiperStdout() error {
+	stdoutPiper, err := s.StdoutPipe()
+	if err != nil {
+		return err
+	}
+
+	buf := make([]byte, 128)
+	cmdBuf := make([]byte, 0, 128)
+	for {
+		select {
+		case <-s.ctx.Done():
+			return nil
+		default:
+			n, err := stdoutPiper.Read(buf)
+			if err != nil {
+				return err
+			}
+			if n > 0 {
+				if _, err := os.Stdout.Write(buf[:n]); err != nil {
+					return err
+				}
+
+				idx := bytes.IndexFunc(buf[:n], func(r rune) bool {
+					if r == '\r' || r == '\n' {
+						return true
+					}
+					return false
+				})
+				if idx == -1 {
+					cmdBuf = append(cmdBuf, buf[:n]...)
+				} else {
+					cmdBuf = append(cmdBuf, buf[:idx+1]...)
+					// os.Stdout.Write(cmdBuf)
+					cmdBuf = make([]byte, 0, 128)
 				}
 			}
 		}
