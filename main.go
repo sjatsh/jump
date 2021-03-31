@@ -204,7 +204,6 @@ func connectServer(host Host) error {
 }
 
 func (s *Session) watchWinch() error {
-	// 监听窗口变更事件
 	sigwinchCh := make(chan os.Signal, 1)
 	signal.Notify(sigwinchCh, syscall.SIGWINCH)
 
@@ -224,11 +223,9 @@ func (s *Session) watchWinch() error {
 			}
 			currTermWidth, currTermHeight, err := terminal.GetSize(fd)
 
-			// 判断一下窗口尺寸是否有改变
 			if currTermHeight == termHeight && currTermWidth == termWidth {
 				continue
 			}
-			// 更新远端大小
 			_ = s.WindowChange(currTermHeight, currTermWidth)
 			if err != nil {
 				continue
@@ -263,7 +260,7 @@ func (s *Session) readStdin() error {
 		default:
 			n, err := os.Stdin.Read(buf)
 			if err != nil {
-				panic(err)
+				return err
 			}
 			if n > 0 {
 				if _, err := stdinPiper.Write(buf[:n]); err != nil {
