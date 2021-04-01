@@ -37,9 +37,25 @@ type Session struct {
 	client  *ssh.Client
 	ctx     context.Context
 	cancel  context.CancelFunc
+	cmd     *cmdEntity
 }
 
-var clear map[string]func()
+type cmdEntity struct {
+	buf    []byte
+	hasTab bool
+}
+
+const (
+	bash        = "-bash: %s: "
+	cmdNotFound = "command not found"
+	legalWords  = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ./_- "
+)
+
+var (
+	clear          map[string]func()
+	allCmd         = []string{"down"}
+	allCmdNotFound []string
+)
 
 func init() {
 	clear = make(map[string]func())
@@ -58,6 +74,10 @@ func init() {
 		if err := cmd.Run(); err != nil {
 			panic(err)
 		}
+	}
+
+	for _, v := range allCmd {
+		allCmdNotFound = append(allCmdNotFound, fmt.Sprintf(bash, v)+cmdNotFound)
 	}
 }
 
@@ -179,10 +199,14 @@ func connectServer(host Host) error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	s := Session{
+
+	s := &Session{
 		session: session,
 		client:  client,
 		ctx:     ctx,
+		cmd: &cmdEntity{
+			buf: make([]byte, 0, 128),
+		},
 	}
 	go s.watchWinch()
 	go s.ping()
@@ -252,7 +276,6 @@ func (s *Session) writePiperStdin() error {
 		return err
 	}
 	buf := make([]byte, 128)
-	cmdBuf := make([]byte, 0, 128)
 	for {
 		select {
 		case <-s.ctx.Done():
@@ -266,21 +289,32 @@ func (s *Session) writePiperStdin() error {
 				if _, err := stdinPiper.Write(buf[:n]); err != nil {
 					return err
 				}
-				idx := bytes.IndexFunc(buf[:n], func(r rune) bool {
-					if r == '\r' || r == '\n' {
-						return true
+
+				for _, b := range buf[:n] {
+					if b == 7 {
+						continue
 					}
-					return false
-				})
-				if idx == -1 {
-					cmdBuf = append(cmdBuf, buf[:n]...)
-					continue
-				}
-				cmdBuf = append(cmdBuf, buf[:idx+1]...)
-				cmdStr := strings.TrimSpace(string(cmdBuf))
-				cmdBuf = make([]byte, 0, 128)
-				if err := s.runCmd(cmdStr); err != nil {
-					return err
+					if b == '\t' {
+						s.cmd.hasTab = true
+						continue
+					}
+					if b == 127 && len(s.cmd.buf) > 0 {
+						s.cmd.buf = s.cmd.buf[:len(s.cmd.buf)-1]
+					}
+					if bytes.Contains([]byte(legalWords), []byte{b}) {
+						s.cmd.buf = append(s.cmd.buf, b)
+					}
+					if b == '\r' {
+						for _, cmd := range allCmd {
+							if bytes.HasPrefix(s.cmd.buf, []byte(cmd)) {
+								if err := s.runCmd(string(s.cmd.buf)); err != nil {
+									return err
+								}
+								break
+							}
+						}
+						s.cmd.buf = make([]byte, 0, 128)
+					}
 				}
 			}
 		}
@@ -292,10 +326,9 @@ func (s *Session) readPiperStdout() error {
 	if err != nil {
 		return err
 	}
-	bash := "-bash"
-	commandNotFound := "command not found"
 
 	buf := make([]byte, 128)
+
 	for {
 		select {
 		case <-s.ctx.Done():
@@ -303,21 +336,28 @@ func (s *Session) readPiperStdout() error {
 		default:
 			n, err := stdoutPiper.Read(buf)
 			if err != nil {
-
 				return err
 			}
 			if n > 0 {
-				firstIdx := bytes.LastIndex(buf[:n], []byte(bash))
-				endIdx := bytes.Index(buf[:n], []byte(commandNotFound))
-				if firstIdx != -1 && endIdx != -1 {
-					buf = append(buf[:firstIdx], buf[endIdx+len(commandNotFound):]...)
-					if n <= len(bash)+len(commandNotFound) {
-						continue
+				ok, result := isSelfCmd(buf[:n])
+				if !ok {
+					if _, err := os.Stdout.Write(buf[:n]); err != nil {
+						return err
 					}
+					if s.cmd.hasTab {
+						for _, b := range buf[:n] {
+							if bytes.Contains([]byte(legalWords), []byte{b}) {
+								s.cmd.buf = append(s.cmd.buf, b)
+							}
+						}
+						s.cmd.hasTab = false
+					}
+					continue
 				}
-
-				if _, err := os.Stdout.Write(buf[:n]); err != nil {
-					return err
+				if len(result) > 0 {
+					if _, err := os.Stdout.Write(result); err != nil {
+						return err
+					}
 				}
 			}
 		}
@@ -349,4 +389,14 @@ func (s *Session) runCmd(cmdStr string) error {
 		return nil
 	}
 	return nil
+}
+
+func isSelfCmd(cmd []byte) (bool, []byte) {
+	cmd = bytes.TrimSpace(cmd)
+	for _, v := range allCmdNotFound {
+		if bytes.Contains(cmd, []byte(v)) {
+			return true, bytes.ReplaceAll(cmd, []byte(v), []byte("\r"))
+		}
+	}
+	return false, nil
 }
