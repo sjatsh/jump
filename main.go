@@ -292,6 +292,8 @@ func (s *Session) readPiperStdout() error {
 	if err != nil {
 		return err
 	}
+	bash := "-bash"
+	commandNotFound := "command not found"
 
 	buf := make([]byte, 128)
 	for {
@@ -301,9 +303,19 @@ func (s *Session) readPiperStdout() error {
 		default:
 			n, err := stdoutPiper.Read(buf)
 			if err != nil {
+
 				return err
 			}
 			if n > 0 {
+				firstIdx := bytes.LastIndex(buf[:n], []byte(bash))
+				endIdx := bytes.Index(buf[:n], []byte(commandNotFound))
+				if firstIdx != -1 && endIdx != -1 {
+					buf = append(buf[:firstIdx], buf[endIdx+len(commandNotFound):]...)
+					if n <= len(bash)+len(commandNotFound) {
+						continue
+					}
+				}
+
 				if _, err := os.Stdout.Write(buf[:n]); err != nil {
 					return err
 				}
