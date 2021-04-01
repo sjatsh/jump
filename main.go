@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -33,27 +34,33 @@ type Host struct {
 }
 
 type Session struct {
-	session *ssh.Session
-	client  *ssh.Client
-	ctx     context.Context
-	cancel  context.CancelFunc
-	cmd     *cmdEntity
+	hostConfig *Host
+	session    *ssh.Session
+	client     *ssh.Client
+	ctx        context.Context
+	cancel     context.CancelFunc
+	cmd        *cmdEntity
+
+	writeLock   *sync.RWMutex
+	stdinPiper  io.WriteCloser
+	stdoutPiper io.Reader
 }
 
 type cmdEntity struct {
-	buf    []byte
-	hasTab bool
+	buf       []byte
+	hasTab    bool
+	hasUpDown bool
 }
 
 const (
 	bash        = "-bash: %s: "
 	cmdNotFound = "command not found"
-	legalWords  = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ./_- "
+	legalWords  = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890./_- "
 )
 
 var (
 	clear          map[string]func()
-	allCmd         = []string{"down"}
+	allCmd         = []string{"down", "up"}
 	allCmdNotFound []string
 )
 
@@ -91,12 +98,12 @@ func main() {
 		panic(err)
 	}
 
-	hosts := make([]Host, 0)
+	hosts := make([]*Host, 0)
 	for _, h := range sshCfg.Hosts {
 		if h.Patterns[0].String() == "*" {
 			continue
 		}
-		host := Host{
+		host := &Host{
 			Host:         h.Patterns[0].String(),
 			User:         os.Getenv("USER"),
 			Port:         22,
@@ -148,22 +155,30 @@ func main() {
 	}
 }
 
-func connectServer(host Host) error {
-	fileData, err := ioutil.ReadFile(host.IdentityFile)
+func (h *Host) getClient() (*ssh.Client, error) {
+	fileData, err := ioutil.ReadFile(h.IdentityFile)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	singer, err := ssh.ParsePrivateKey(fileData)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	client, err := ssh.Dial("tcp", fmt.Sprintf("%s:%d", host.HostName, host.Port), &ssh.ClientConfig{
-		User:            host.User,
+	client, err := ssh.Dial("tcp", fmt.Sprintf("%s:%d", h.HostName, h.Port), &ssh.ClientConfig{
+		User:            h.User,
 		Auth:            []ssh.AuthMethod{ssh.PublicKeys(singer)},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         5 * time.Second,
 	})
+	if err != nil {
+		return nil, err
+	}
+	return client, nil
+}
+
+func connectServer(host *Host) error {
+	client, err := host.getClient()
 	if err != nil {
 		return err
 	}
@@ -200,22 +215,38 @@ func connectServer(host Host) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	s := &Session{
-		session: session,
-		client:  client,
-		ctx:     ctx,
-		cmd: &cmdEntity{
-			buf: make([]byte, 0, 128),
-		},
+	stdinPiper, err := session.StdinPipe()
+	if err != nil {
+		return err
 	}
-	go s.watchWinch()
-	go s.ping()
+	defer stdinPiper.Close()
+
+	stdoutPiper, err := session.StdoutPipe()
+	if err != nil {
+		return err
+	}
 
 	stderrPiper, err := session.StderrPipe()
 	if err != nil {
 		return err
 	}
 	go io.Copy(os.Stderr, stderrPiper)
+
+	s := &Session{
+		hostConfig: host,
+		session:    session,
+		client:     client,
+		ctx:        ctx,
+		cmd: &cmdEntity{
+			buf: make([]byte, 0, 128),
+		},
+		writeLock:   &sync.RWMutex{},
+		stdinPiper:  stdinPiper,
+		stdoutPiper: stdoutPiper,
+	}
+	go s.watchWinch()
+	go s.ping()
+
 	go s.writePiperStdin()
 	go s.readPiperStdout()
 
@@ -271,40 +302,37 @@ func (s *Session) ping() {
 }
 
 func (s *Session) writePiperStdin() error {
-	stdinPiper, err := s.session.StdinPipe()
-	if err != nil {
-		return err
-	}
+	fd := int(os.Stdin.Fd())
 	buf := make([]byte, 128)
 	for {
 		select {
 		case <-s.ctx.Done():
 			return nil
 		default:
-			n, err := os.Stdin.Read(buf)
+			n, err := syscall.Read(fd, buf)
 			if err != nil {
 				return err
 			}
 			if n > 0 {
-				if _, err := stdinPiper.Write(buf[:n]); err != nil {
+				s.writeLock.Lock()
+				if _, err := s.stdinPiper.Write(buf[:n]); err != nil {
+					s.writeLock.Unlock()
 					return err
 				}
+				s.writeLock.Unlock()
 
-				for _, b := range buf[:n] {
-					if b == 7 {
-						continue
-					}
-					if b == '\t' {
-						s.cmd.hasTab = true
-						continue
-					}
-					if b == 127 && len(s.cmd.buf) > 0 {
+				key := GetKey(buf[:n])
+				switch key {
+				case Up, Down:
+					s.cmd.hasUpDown = true
+				case Tab:
+					s.cmd.hasTab = true
+				case Backspace:
+					if len(s.cmd.buf) > 0 {
 						s.cmd.buf = s.cmd.buf[:len(s.cmd.buf)-1]
 					}
-					if bytes.Contains([]byte(legalWords), []byte{b}) {
-						s.cmd.buf = append(s.cmd.buf, b)
-					}
-					if b == '\r' {
+				case Enter, ControlM:
+					if len(s.cmd.buf) > 0 {
 						for _, cmd := range allCmd {
 							if bytes.HasPrefix(s.cmd.buf, []byte(cmd)) {
 								if err := s.runCmd(string(s.cmd.buf)); err != nil {
@@ -315,6 +343,12 @@ func (s *Session) writePiperStdin() error {
 						}
 						s.cmd.buf = make([]byte, 0, 128)
 					}
+				default:
+					for _, b := range buf[:n] {
+						if bytes.Contains([]byte(legalWords), []byte{b}) {
+							s.cmd.buf = append(s.cmd.buf, b)
+						}
+					}
 				}
 			}
 		}
@@ -322,11 +356,6 @@ func (s *Session) writePiperStdin() error {
 }
 
 func (s *Session) readPiperStdout() error {
-	stdoutPiper, err := s.session.StdoutPipe()
-	if err != nil {
-		return err
-	}
-
 	buf := make([]byte, 128)
 
 	for {
@@ -334,7 +363,7 @@ func (s *Session) readPiperStdout() error {
 		case <-s.ctx.Done():
 			return nil
 		default:
-			n, err := stdoutPiper.Read(buf)
+			n, err := s.stdoutPiper.Read(buf)
 			if err != nil {
 				return err
 			}
@@ -351,6 +380,11 @@ func (s *Session) readPiperStdout() error {
 							}
 						}
 						s.cmd.hasTab = false
+					}
+
+					if s.cmd.hasUpDown {
+						s.cmd.buf = buf[:n]
+						s.cmd.hasUpDown = false
 					}
 					continue
 				}
@@ -372,19 +406,59 @@ func (s *Session) runCmd(cmdStr string) error {
 
 	cmd := cmdParams[0]
 	switch cmd {
-	case "down":
+	case "down", "up":
 		if len(cmdParams) < 2 {
 			return nil
 		}
-		fileName := filepath.Base(cmdParams[1])
+
+		client, err := s.hostConfig.getClient()
+		if err != nil {
+			return err
+		}
+
+		fileName := filepath.Base(strings.TrimSpace(cmdParams[1]))
 		localPath := "."
 		if len(cmdParams) >= 3 {
 			localPath = cmdParams[2]
 		}
 		localPath = filepath.Join(localPath, fileName)
-		if err := scp.NewSCP(s.client).ReceiveFile(cmdParams[1], localPath); err != nil {
-			return err
-		}
+
+		go func() {
+			defer client.Close()
+
+			if cmd == "down" {
+				if err := scp.NewSCP(client).ReceiveFile(cmdParams[1], localPath); err != nil && err != io.EOF {
+					s.writeLock.Lock()
+					_, _ = s.stdinPiper.Write([]byte{0xd})
+					_, _ = os.Stdout.Write([]byte(fmt.Sprintf("\r\rdown %s error: %v   ", fileName, err)))
+					_, _ = s.stdinPiper.Write([]byte{0xd})
+					s.writeLock.Unlock()
+					return
+				}
+				s.writeLock.Lock()
+				_, _ = s.stdinPiper.Write([]byte{0xd})
+				_, _ = os.Stdout.Write([]byte(fmt.Sprintf("\r\rdown %s success   ", fileName)))
+				_, _ = s.stdinPiper.Write([]byte{0xd})
+				s.writeLock.Unlock()
+			}
+
+			if cmd == "up" {
+				if err := scp.NewSCP(client).SendFile(cmdParams[1], localPath); err != nil && err != io.EOF {
+					s.writeLock.Lock()
+					_, _ = s.stdinPiper.Write([]byte{0xd})
+					_, _ = os.Stdout.Write([]byte(fmt.Sprintf("\r\rup %s error: %v   ", fileName, err)))
+					_, _ = s.stdinPiper.Write([]byte{0xd})
+					s.writeLock.Unlock()
+					return
+				}
+				s.writeLock.Lock()
+				_, _ = s.stdinPiper.Write([]byte{0xd})
+				_, _ = os.Stdout.Write([]byte(fmt.Sprintf("\r\rup %s success   ", fileName)))
+				_, _ = s.stdinPiper.Write([]byte{0xd})
+				s.writeLock.Unlock()
+			}
+		}()
+
 	default:
 		return nil
 	}
