@@ -323,15 +323,15 @@ func (s *Session) writePiperStdin() error {
 
 				key := GetKey(buf[:n])
 				switch key {
-				case Up, Down:
+				case KeyUp, KeyDown:
 					s.cmd.hasUpDown = true
-				case Tab:
+				case KeyTab:
 					s.cmd.hasTab = true
-				case Backspace:
+				case KeyBackspace:
 					if len(s.cmd.buf) > 0 {
 						s.cmd.buf = s.cmd.buf[:len(s.cmd.buf)-1]
 					}
-				case Enter, ControlM:
+				case KeyEnter, KeyControlM:
 					if len(s.cmd.buf) > 0 {
 						for _, cmd := range allCmd {
 							if bytes.HasPrefix(s.cmd.buf, []byte(cmd)) {
