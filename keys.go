@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"runtime"
 )
 
 type (
@@ -91,6 +92,11 @@ const (
 	KeyIgnore             KeyType = "Ignore"
 )
 
+var (
+	CodeControlM = CodeType{0xd}
+	CodeEnter    = CodeType{0xa}
+)
+
 type ASCIICode struct {
 	Key  KeyType
 	Code CodeType
@@ -115,7 +121,7 @@ var Codes = []*ASCIICode{
 	// {Key: "ControlJ", Code: []byte{0xa}},
 	{Key: KeyControlK, Code: CodeType{0xb}},
 	{Key: KeyControlL, Code: CodeType{0xc}},
-	{Key: KeyControlM, Code: CodeType{0xd}},
+	{Key: KeyControlM, Code: CodeControlM},
 	{Key: KeyControlN, Code: CodeType{0xe}},
 	{Key: KeyControlO, Code: CodeType{0xf}},
 	{Key: KeyControlP, Code: CodeType{0x10}},
@@ -142,7 +148,7 @@ var Codes = []*ASCIICode{
 	{Key: KeyHome, Code: CodeType{0x1b, 0x30, 0x48}},
 	{Key: KeyEnd, Code: CodeType{0x1b, 0x5b, 0x46}},
 	{Key: KeyEnd, Code: CodeType{0x1b, 0x30, 0x46}},
-	{Key: KeyEnter, Code: CodeType{0xa}},
+	{Key: KeyEnter, Code: CodeEnter},
 	{Key: KeyDelete, Code: CodeType{0x1b, 0x5b, 0x33, 0x7e}},
 	{Key: KeyShiftDelete, Code: CodeType{0x1b, 0x5b, 0x33, 0x3b, 0x32, 0x7e}},
 	{Key: KeyControlDelete, Code: CodeType{0x1b, 0x5b, 0x33, 0x3b, 0x35, 0x7e}},
@@ -229,4 +235,17 @@ func GetKey(code CodeType) KeyType {
 		}
 	}
 	return ""
+}
+
+func GetCode(key KeyType) CodeType {
+	switch key {
+	case KeyEnter:
+		switch runtime.GOOS {
+		case "darwin":
+			return CodeControlM
+		default:
+			return CodeEnter
+		}
+	}
+	return nil
 }

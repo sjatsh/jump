@@ -426,41 +426,39 @@ func (s *Session) runCmd(cmdStr string) error {
 		go func() {
 			defer client.Close()
 
-			if cmd == "down" {
+			switch cmd {
+			case "down":
 				if err := scp.NewSCP(client).ReceiveFile(cmdParams[1], localPath); err != nil && err != io.EOF {
-					s.writeLock.Lock()
-					_, _ = s.stdinPiper.Write([]byte{0xd})
-					_, _ = os.Stdout.Write([]byte(fmt.Sprintf("\r\rdown %s error: %v   ", fileName, err)))
-					_, _ = s.stdinPiper.Write([]byte{0xd})
-					s.writeLock.Unlock()
+					_ = s.sendMsg(fmt.Sprintf("\r\rdown %s error: %v   ", fileName, err))
 					return
 				}
-				s.writeLock.Lock()
-				_, _ = s.stdinPiper.Write([]byte{0xd})
-				_, _ = os.Stdout.Write([]byte(fmt.Sprintf("\r\rdown %s success   ", fileName)))
-				_, _ = s.stdinPiper.Write([]byte{0xd})
-				s.writeLock.Unlock()
-			}
-
-			if cmd == "up" {
+				_ = s.sendMsg(fmt.Sprintf("\r\rdown %s success   ", fileName))
+			case "up":
 				if err := scp.NewSCP(client).SendFile(cmdParams[1], localPath); err != nil && err != io.EOF {
-					s.writeLock.Lock()
-					_, _ = s.stdinPiper.Write([]byte{0xd})
-					_, _ = os.Stdout.Write([]byte(fmt.Sprintf("\r\rup %s error: %v   ", fileName, err)))
-					_, _ = s.stdinPiper.Write([]byte{0xd})
-					s.writeLock.Unlock()
+					_ = s.sendMsg(fmt.Sprintf("\r\rup %s error: %v   ", fileName, err))
 					return
 				}
-				s.writeLock.Lock()
-				_, _ = s.stdinPiper.Write([]byte{0xd})
-				_, _ = os.Stdout.Write([]byte(fmt.Sprintf("\r\rup %s success   ", fileName)))
-				_, _ = s.stdinPiper.Write([]byte{0xd})
-				s.writeLock.Unlock()
+				_ = s.sendMsg(fmt.Sprintf("\r\rup %s success   ", fileName))
 			}
 		}()
 
 	default:
 		return nil
+	}
+	return nil
+}
+
+func (s *Session) sendMsg(msg string) error {
+	s.writeLock.Lock()
+	defer s.writeLock.Unlock()
+	if _, err := s.stdinPiper.Write(GetCode(KeyEnter)); err != nil {
+		return err
+	}
+	if _, err := os.Stdout.Write([]byte(msg)); err != nil {
+		return err
+	}
+	if _, err := s.stdinPiper.Write(GetCode(KeyEnter)); err != nil {
+		return err
 	}
 	return nil
 }
