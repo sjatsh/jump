@@ -331,6 +331,8 @@ func (s *Session) writePiperStdin() error {
 					if len(s.cmd.buf) > 0 {
 						s.cmd.buf = s.cmd.buf[:len(s.cmd.buf)-1]
 					}
+				case KeyControlC:
+					s.cmd.buf = make([]byte, 0, 128)
 				case KeyEnter, KeyControlM:
 					if len(s.cmd.buf) > 0 {
 						for _, cmd := range allCmd {

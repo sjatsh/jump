@@ -93,8 +93,53 @@ const (
 )
 
 var (
-	CodeControlM = CodeType{0xd}
-	CodeEnter    = CodeType{0xa}
+	CodeEscape = CodeType{0x1b}
+
+	CodeControlSpace = CodeType{0x00}
+	CodeControlA     = CodeType{0x1}
+	CodeControlB     = CodeType{0x2}
+	CodeControlC     = CodeType{0x3}
+	CodeControlD     = CodeType{0x4}
+	CodeControlE     = CodeType{0x5}
+	CodeControlF     = CodeType{0x6}
+	CodeControlG     = CodeType{0x7}
+	CodeControlH     = CodeType{0x8}
+	CodeControlK     = CodeType{0xb}
+	CodeControlL     = CodeType{0xc}
+	CodeControlM     = CodeType{0xd}
+	CodeControlN     = CodeType{0xe}
+	CodeControlO     = CodeType{0xf}
+	CodeControlP     = CodeType{0x10}
+	CodeControlQ     = CodeType{0x11}
+	CodeControlR     = CodeType{0x12}
+	CodeControlS     = CodeType{0x13}
+	CodeControlT     = CodeType{0x14}
+	CodeControlU     = CodeType{0x15}
+	CodeControlV     = CodeType{0x16}
+	CodeControlW     = CodeType{0x17}
+	CodeControlX     = CodeType{0x18}
+	CodeControlY     = CodeType{0x19}
+	CodeControlZ     = CodeType{0x1a}
+
+	CodeControlBackslash   = CodeType{0x1c}
+	CodeControlSquareClose = CodeType{0x1d}
+	CodeControlCircumflex  = CodeType{0x1e}
+	CodeControlUnderscore  = CodeType{0x1f}
+	CodeBackspace          = CodeType{0x7f}
+
+	CodeUp    = CodeType{0x1b, 0x5b, 0x41}
+	CodeDown  = CodeType{0x1b, 0x5b, 0x42}
+	CodeRight = CodeType{0x1b, 0x5b, 0x43}
+	CodeLeft  = CodeType{0x1b, 0x5b, 0x44}
+	CodeHome1 = CodeType{0x1b, 0x5b, 0x48}
+	CodeHome2 = CodeType{0x1b, 0x30, 0x48}
+	CodeEnd1  = CodeType{0x1b, 0x5b, 0x46}
+	CodeEnd2  = CodeType{0x1b, 0x30, 0x46}
+
+	CodeEnter  = CodeType{0xa}
+	CodeDelete = CodeType{0x1b, 0x5b, 0x33, 0x7e}
+	CodeShiftDelete = CodeType{0x1b, 0x5b, 0x33, 0x3b, 0x32, 0x7e}
+	CodeControlDelete = CodeType{0x1b, 0x5b, 0x33, 0x3b, 0x35, 0x7e}
 )
 
 type ASCIICode struct {
@@ -107,51 +152,55 @@ func (c *ASCIICode) String() string {
 }
 
 var Codes = []*ASCIICode{
-	{Key: KeyEscape, Code: CodeType{0x1b}},
-	{Key: KeyControlSpace, Code: CodeType{0x00}},
-	{Key: KeyControlA, Code: CodeType{0x1}},
-	{Key: KeyControlB, Code: CodeType{0x2}},
-	{Key: KeyControlC, Code: CodeType{0x3}},
-	{Key: KeyControlD, Code: CodeType{0x4}},
-	{Key: KeyControlE, Code: CodeType{0x5}},
-	{Key: KeyControlF, Code: CodeType{0x6}},
-	{Key: KeyControlG, Code: CodeType{0x7}},
-	{Key: KeyControlH, Code: CodeType{0x8}},
+	{Key: KeyEscape, Code: CodeEscape},
+
+	{Key: KeyControlSpace, Code: CodeControlSpace},
+	{Key: KeyControlA, Code: CodeControlA},
+	{Key: KeyControlB, Code: CodeControlB},
+	{Key: KeyControlC, Code: CodeControlC},
+	{Key: KeyControlD, Code: CodeControlD},
+	{Key: KeyControlE, Code: CodeControlE},
+	{Key: KeyControlF, Code: CodeControlF},
+	{Key: KeyControlG, Code: CodeControlG},
+	{Key: KeyControlH, Code: CodeControlH},
 	// {Key: "ControlI", Code: []byte{0x9}},
 	// {Key: "ControlJ", Code: []byte{0xa}},
-	{Key: KeyControlK, Code: CodeType{0xb}},
-	{Key: KeyControlL, Code: CodeType{0xc}},
+	{Key: KeyControlK, Code: CodeControlK},
+	{Key: KeyControlL, Code: CodeControlL},
 	{Key: KeyControlM, Code: CodeControlM},
-	{Key: KeyControlN, Code: CodeType{0xe}},
-	{Key: KeyControlO, Code: CodeType{0xf}},
-	{Key: KeyControlP, Code: CodeType{0x10}},
-	{Key: KeyControlQ, Code: CodeType{0x11}},
-	{Key: KeyControlR, Code: CodeType{0x12}},
-	{Key: KeyControlS, Code: CodeType{0x13}},
-	{Key: KeyControlT, Code: CodeType{0x14}},
-	{Key: KeyControlU, Code: CodeType{0x15}},
-	{Key: KeyControlV, Code: CodeType{0x16}},
-	{Key: KeyControlW, Code: CodeType{0x17}},
-	{Key: KeyControlX, Code: CodeType{0x18}},
-	{Key: KeyControlY, Code: CodeType{0x19}},
-	{Key: KeyControlZ, Code: CodeType{0x1a}},
-	{Key: KeyControlBackslash, Code: CodeType{0x1c}},
-	{Key: KeyControlSquareClose, Code: CodeType{0x1d}},
-	{Key: KeyControlCircumflex, Code: CodeType{0x1e}},
-	{Key: KeyControlUnderscore, Code: CodeType{0x1f}},
-	{Key: KeyBackspace, Code: CodeType{0x7f}},
-	{Key: KeyUp, Code: CodeType{0x1b, 0x5b, 0x41}},
-	{Key: KeyDown, Code: CodeType{0x1b, 0x5b, 0x42}},
-	{Key: KeyRight, Code: CodeType{0x1b, 0x5b, 0x43}},
-	{Key: KeyLeft, Code: CodeType{0x1b, 0x5b, 0x44}},
-	{Key: KeyHome, Code: CodeType{0x1b, 0x5b, 0x48}},
-	{Key: KeyHome, Code: CodeType{0x1b, 0x30, 0x48}},
-	{Key: KeyEnd, Code: CodeType{0x1b, 0x5b, 0x46}},
-	{Key: KeyEnd, Code: CodeType{0x1b, 0x30, 0x46}},
+	{Key: KeyControlN, Code: CodeControlN},
+	{Key: KeyControlO, Code: CodeControlO},
+	{Key: KeyControlP, Code: CodeControlP},
+	{Key: KeyControlQ, Code: CodeControlQ},
+	{Key: KeyControlR, Code: CodeControlR},
+	{Key: KeyControlS, Code: CodeControlS},
+	{Key: KeyControlT, Code: CodeControlT},
+	{Key: KeyControlU, Code: CodeControlU},
+	{Key: KeyControlV, Code: CodeControlV},
+	{Key: KeyControlW, Code: CodeControlW},
+	{Key: KeyControlX, Code: CodeControlX},
+	{Key: KeyControlY, Code: CodeControlY},
+	{Key: KeyControlZ, Code: CodeControlZ},
+
+	{Key: KeyControlBackslash, Code: CodeControlBackslash},
+	{Key: KeyControlSquareClose, Code: CodeControlSquareClose},
+	{Key: KeyControlCircumflex, Code: CodeControlCircumflex},
+	{Key: KeyControlUnderscore, Code: CodeControlUnderscore},
+	{Key: KeyBackspace, Code: CodeBackspace},
+
+	{Key: KeyUp, Code: CodeUp},
+	{Key: KeyDown, Code: CodeDown},
+	{Key: KeyRight, Code: CodeRight},
+	{Key: KeyLeft, Code: CodeLeft},
+	{Key: KeyHome, Code: CodeHome1},
+	{Key: KeyHome, Code: CodeHome2},
+	{Key: KeyEnd, Code: CodeEnd1},
+	{Key: KeyEnd, Code: CodeEnd2},
+
 	{Key: KeyEnter, Code: CodeEnter},
-	{Key: KeyDelete, Code: CodeType{0x1b, 0x5b, 0x33, 0x7e}},
-	{Key: KeyShiftDelete, Code: CodeType{0x1b, 0x5b, 0x33, 0x3b, 0x32, 0x7e}},
-	{Key: KeyControlDelete, Code: CodeType{0x1b, 0x5b, 0x33, 0x3b, 0x35, 0x7e}},
+	{Key: KeyDelete, Code: CodeDelete},
+	{Key: KeyShiftDelete, Code: CodeShiftDelete},
+	{Key: KeyControlDelete, Code: CodeControlDelete},
 	{Key: KeyHome, Code: CodeType{0x1b, 0x5b, 0x31, 0x7e}},
 	{Key: KeyEnd, Code: CodeType{0x1b, 0x5b, 0x34, 0x7e}},
 	{Key: KeyPageUp, Code: CodeType{0x1b, 0x5b, 0x35, 0x7e}},
@@ -161,19 +210,23 @@ var Codes = []*ASCIICode{
 	{Key: KeyTab, Code: CodeType{0x9}},
 	{Key: KeyBackTab, Code: CodeType{0x1b, 0x5b, 0x5a}},
 	{Key: KeyInsert, Code: CodeType{0x1b, 0x5b, 0x32, 0x7e}},
+
 	{Key: KeyF1, Code: CodeType{0x1b, 0x4f, 0x50}},
 	{Key: KeyF2, Code: CodeType{0x1b, 0x4f, 0x51}},
 	{Key: KeyF3, Code: CodeType{0x1b, 0x4f, 0x52}},
 	{Key: KeyF4, Code: CodeType{0x1b, 0x4f, 0x53}},
+
 	{Key: KeyF1, Code: CodeType{0x1b, 0x4f, 0x50, 0x41}}, // Linux console
 	{Key: KeyF2, Code: CodeType{0x1b, 0x5b, 0x5b, 0x42}}, // Linux console
 	{Key: KeyF3, Code: CodeType{0x1b, 0x5b, 0x5b, 0x43}}, // Linux console
 	{Key: KeyF4, Code: CodeType{0x1b, 0x5b, 0x5b, 0x44}}, // Linux console
 	{Key: KeyF5, Code: CodeType{0x1b, 0x5b, 0x5b, 0x45}}, // Linux console
+
 	{Key: KeyF1, Code: CodeType{0x1b, 0x5b, 0x11, 0x7e}}, // rxvt-unicode
 	{Key: KeyF2, Code: CodeType{0x1b, 0x5b, 0x12, 0x7e}}, // rxvt-unicode
 	{Key: KeyF3, Code: CodeType{0x1b, 0x5b, 0x13, 0x7e}}, // rxvt-unicode
 	{Key: KeyF4, Code: CodeType{0x1b, 0x5b, 0x14, 0x7e}}, // rxvt-unicode
+
 	{Key: KeyF5, Code: CodeType{0x1b, 0x5b, 0x31, 0x35, 0x7e}},
 	{Key: KeyF6, Code: CodeType{0x1b, 0x5b, 0x31, 0x37, 0x7e}},
 	{Key: KeyF7, Code: CodeType{0x1b, 0x5b, 0x31, 0x38, 0x7e}},
@@ -192,6 +245,7 @@ var Codes = []*ASCIICode{
 	{Key: KeyF18, Code: CodeType{0x1b, 0x5b, 0x32, 0x7e}},
 	{Key: KeyF19, Code: CodeType{0x1b, 0x5b, 0x33, 0x7e}},
 	{Key: KeyF20, Code: CodeType{0x1b, 0x5b, 0x34, 0x7e}},
+
 	{Key: KeyF13, Code: CodeType{0x1b, 0x5b, 0x31, 0x3b, 0x32, 0x50}},
 	{Key: KeyF14, Code: CodeType{0x1b, 0x5b, 0x31, 0x3b, 0x32, 0x51}},
 	{Key: KeyF16, Code: CodeType{0x1b, 0x5b, 0x31, 0x3b, 0x32, 0x52}},
@@ -203,14 +257,17 @@ var Codes = []*ASCIICode{
 	{Key: KeyF22, Code: CodeType{0x1b, 0x5b, 0x21, 0x3b, 0x32, 0x7e}},
 	{Key: KeyF23, Code: CodeType{0x1b, 0x5b, 0x23, 0x3b, 0x32, 0x7e}},
 	{Key: KeyF24, Code: CodeType{0x1b, 0x5b, 0x24, 0x3b, 0x32, 0x7e}},
+
 	{Key: KeyControlUp, Code: CodeType{0x1b, 0x5b, 0x31, 0x3b, 0x35, 0x41}},
 	{Key: KeyControlDown, Code: CodeType{0x1b, 0x5b, 0x31, 0x3b, 0x35, 0x42}},
 	{Key: KeyControlRight, Code: CodeType{0x1b, 0x5b, 0x31, 0x3b, 0x35, 0x43}},
 	{Key: KeyControlLeft, Code: CodeType{0x1b, 0x5b, 0x31, 0x3b, 0x35, 0x44}},
+
 	{Key: KeyShiftUp, Code: CodeType{0x1b, 0x5b, 0x31, 0x3b, 0x32, 0x41}},
 	{Key: KeyShiftDown, Code: CodeType{0x1b, 0x5b, 0x31, 0x3b, 0x32, 0x42}},
 	{Key: KeyShiftRight, Code: CodeType{0x1b, 0x5b, 0x31, 0x3b, 0x32, 0x43}},
 	{Key: KeyShiftLeft, Code: CodeType{0x1b, 0x5b, 0x31, 0x3b, 0x32, 0x44}},
+
 	// Tmux sends following keystrokes when control+arrow is pressed, but for
 	// Emacs ansi-term sends the same sequences for normal arrow keys. Consider
 	// it a normal arrow press, because that's more important.
@@ -218,14 +275,17 @@ var Codes = []*ASCIICode{
 	{Key: KeyDown, Code: CodeType{0x1b, 0x4f, 0x42}},
 	{Key: KeyRight, Code: CodeType{0x1b, 0x4f, 0x43}},
 	{Key: KeyLeft, Code: CodeType{0x1b, 0x4f, 0x44}},
+
 	{Key: KeyControlUp, Code: CodeType{0x1b, 0x5b, 0x35, 0x41}},
 	{Key: KeyControlDown, Code: CodeType{0x1b, 0x5b, 0x35, 0x42}},
 	{Key: KeyControlRight, Code: CodeType{0x1b, 0x5b, 0x35, 0x43}},
 	{Key: KeyControlLeft, Code: CodeType{0x1b, 0x5b, 0x35, 0x44}},
+
 	{Key: KeyControlRight, Code: CodeType{0x1b, 0x5b, 0x4f, 0x63}}, // rxvt
 	{Key: KeyControlLeft, Code: CodeType{0x1b, 0x5b, 0x4f, 0x64}},  // rxvt
-	{Key: KeyIgnore, Code: CodeType{0x1b, 0x5b, 0x45}},             // Xterm
-	{Key: KeyIgnore, Code: CodeType{0x1b, 0x5b, 0x46}},             // Linux console
+
+	{Key: KeyIgnore, Code: CodeType{0x1b, 0x5b, 0x45}}, // Xterm
+	{Key: KeyIgnore, Code: CodeType{0x1b, 0x5b, 0x46}}, // Linux console
 }
 
 func GetKey(code CodeType) KeyType {
