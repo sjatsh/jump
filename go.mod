@@ -3,10 +3,8 @@ module github.com/sjatsh/jump
 go 1.16
 
 require (
-	github.com/bramvdbogaerde/go-scp v0.0.0-20210327204631-70ee53679fc9 // indirect
-	github.com/hnakamur/go-scp v1.0.1 // indirect
 	github.com/kevinburke/ssh_config v1.1.0
 	github.com/manifoldco/promptui v0.8.0
-	github.com/urfave/cli/v2 v2.3.0 // indirect
+	github.com/sjatsh/go-scp v1.1.3
 	golang.org/x/crypto v0.0.0-20210322153248-0c34fe9e7dc2
 )

@@ -17,9 +17,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/hnakamur/go-scp"
 	"github.com/kevinburke/ssh_config"
 	"github.com/manifoldco/promptui"
+	"github.com/sjatsh/go-scp"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/terminal"
 )
