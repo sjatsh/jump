@@ -55,7 +55,7 @@ type cmdEntity struct {
 const (
 	bash        = "-bash: %s: "
 	cmdNotFound = "command not found"
-	legalWords  = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890./_- "
+	legalWords  = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789./_- "
 )
 
 var (
