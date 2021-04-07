@@ -127,6 +127,7 @@ func main() {
 		}
 		idx++
 		host := &Host{
+			Env:          "default",
 			Index:        idx,
 			Host:         h.Patterns[0].String(),
 			User:         os.Getenv("USER"),
@@ -147,11 +148,9 @@ func main() {
 		}
 
 		hostSlice := strings.Split(host.Host, "_")
-		if len(hostSlice) == 1 {
-			fmt.Printf("Host %s 缺少环境配置", host.Host)
-			return
+		if len(hostSlice) == 2 {
+			host.Env = hostSlice[1]
 		}
-		host.Env = hostSlice[1]
 		host.IdentityFile = strings.ReplaceAll(host.IdentityFile, "~", os.Getenv("HOME"))
 		hosts = append(hosts, host)
 	}
