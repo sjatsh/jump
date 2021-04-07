@@ -11,12 +11,12 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
+	"github.com/gogf/gf/util/gconv"
 	"github.com/kevinburke/ssh_config"
 	"github.com/manifoldco/promptui"
 	"github.com/sjatsh/go-scp"
@@ -25,12 +25,31 @@ import (
 )
 
 type Host struct {
-	Host         string `json:"host"`
-	HostName     string `json:"host_name"`
-	User         string `json:"user"`
-	Port         int    `json:"port"`
-	IdentityFile string `json:"identity_file"`
-	Comment      string `json:"comment"`
+	Env                             string
+	Host                            string
+	AddKeysToAgent                  string
+	AddressFamily                   string
+	BindAddress                     string
+	ChallengeResponseAuthentication string
+	Compression                     string
+	CompressionLevel                int
+	ConnectionAttempts              int
+	ConnectTimeout                  int
+	ControlMaster                   string
+	ControlPath                     string
+	ControlPersist                  string
+	GatewayPorts                    string
+	HostName                        string
+	IdentitiesOnly                  string
+	IdentityFile                    string
+	LocalCommand                    string
+	LocalForward                    string
+	PasswordAuthentication          string
+	PermitLocalCommand              string
+	Port                            int
+	ProxyCommand                    string
+	User                            string
+	Comment                         string
 }
 
 type Session struct {
@@ -111,21 +130,24 @@ func main() {
 			Comment:      h.EOLComment,
 		}
 
+		params := make(map[string]string)
 		for _, node := range h.Nodes {
 			switch v := node.(type) {
 			case *ssh_config.KV:
-				switch v.Key {
-				case "HostName":
-					host.HostName = v.Value
-				case "Port":
-					host.Port, _ = strconv.Atoi(v.Value)
-				case "IdentityFile":
-					host.IdentityFile = strings.ReplaceAll(v.Value, "~", os.Getenv("HOME"))
-				case "User":
-					host.User = v.Value
-				}
+				params[v.Key] = v.Value
 			}
 		}
+		if err := gconv.Struct(params, host); err != nil {
+			panic(err)
+		}
+
+		hostSlice := strings.Split(host.Host, "_")
+		if len(hostSlice) == 1 {
+			fmt.Printf("Host %s 缺少环境配置", host.Host)
+			return
+		}
+		host.Env = hostSlice[1]
+		host.IdentityFile = strings.ReplaceAll(host.IdentityFile, "~", os.Getenv("HOME"))
 		hosts = append(hosts, host)
 	}
 
