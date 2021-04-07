@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -25,6 +26,7 @@ import (
 )
 
 type Host struct {
+	Index                           int
 	Env                             string
 	Host                            string
 	AddKeysToAgent                  string
@@ -117,12 +119,15 @@ func main() {
 		panic(err)
 	}
 
+	idx := 0
 	hosts := make([]*Host, 0)
 	for _, h := range sshCfg.Hosts {
 		if h.Patterns[0].String() == "*" {
 			continue
 		}
+		idx++
 		host := &Host{
+			Index:        idx,
 			Host:         h.Patterns[0].String(),
 			User:         os.Getenv("USER"),
 			Port:         22,
@@ -151,15 +156,42 @@ func main() {
 		hosts = append(hosts, host)
 	}
 
+	templates := &promptui.SelectTemplates{
+		Label:    "{{ . }}:",
+		Active:   "\U0001F449 {{ .Index | cyan }}: {{ .Env | cyan }} {{ .User | green }} {{ .HostName | yellow }} {{ .Comment | white }}",
+		Inactive: "  {{ .Index | cyan }}: {{ .Env | cyan }} {{ .User | green }} {{ .HostName | yellow }} {{ .Comment | white }}",
+		Selected: "\U0001F449 {{ .Index | cyan }}: {{ .Env | cyan }} {{ .User | green }} {{ .HostName | yellow }} {{ .Comment | white }}",
+	}
+
+	searcher := func(input string, index int) bool {
+		host := hosts[index]
+		idx, err := strconv.Atoi(input)
+		if err == nil && idx == host.Index {
+			return true
+		}
+		if strings.Contains(host.Env, input) {
+			return true
+		}
+		if strings.Contains(host.User, input) {
+			return true
+		}
+		if strings.Contains(host.HostName, input) {
+			return true
+		}
+		if strings.Contains(host.Comment, input) {
+			return true
+		}
+		return false
+	}
+
 	prompt := promptui.Select{
-		Size:  20,
-		Label: "选择机器",
+		Size:              20,
+		Label:             "机器列表",
+		Items:             hosts,
+		Templates:         templates,
+		Searcher:          searcher,
+		StartInSearchMode: true,
 	}
-	var items []string
-	for _, host := range hosts {
-		items = append(items, host.HostName+" "+host.Comment)
-	}
-	prompt.Items = items
 
 	for {
 		clear[runtime.GOOS]()
