@@ -165,8 +165,8 @@ func main() {
 
 	searcher := func(input string, index int) bool {
 		host := hosts[index]
-		idx, err := strconv.Atoi(input)
-		if err == nil && idx == host.Index {
+		number, errNumber := strconv.Atoi(input)
+		if errNumber == nil && number == host.Index {
 			return true
 		}
 		if strings.Contains(host.Env, input) {
@@ -175,8 +175,10 @@ func main() {
 		if strings.Contains(host.User, input) {
 			return true
 		}
-		if strings.Contains(host.HostName, input) {
-			return true
+		if errNumber != nil {
+			if strings.Contains(host.HostName, input) {
+				return true
+			}
 		}
 		if strings.Contains(host.Comment, input) {
 			return true
