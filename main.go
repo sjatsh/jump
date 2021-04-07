@@ -165,7 +165,7 @@ func main() {
 		clear[runtime.GOOS]()
 		idx, _, err := prompt.Run()
 		if err != nil {
-			if err.Error() == "^C" {
+			if err == promptui.ErrInterrupt {
 				return
 			}
 			panic(err)
