@@ -63,8 +63,8 @@ github.com/olekukonko/tablewriter v0.0.5/go.mod h1:hPp6KlRPjbx+hW8ykQs1w3UBbZlj6
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/rivo/uniseg v0.1.0 h1:+2KBaVoUmb9XzDsrx/Ct0W/EYOSFf/nWTauy++DprtY=
 github.com/rivo/uniseg v0.1.0/go.mod h1:J6wj4VEh+S6ZtnVlnTBMWIodfgj8LQOQFoIToxlJtxc=
-github.com/sjatsh/go-scp v1.1.3 h1:JXhm4qKOs/IFeDX8EsrggS6RfIXr+hqBVEMfrZ9AHAA=
-github.com/sjatsh/go-scp v1.1.3/go.mod h1:yUV0RIC35mtEY5Ws4zal7WNECVC/vpNozfgOut79A2M=
+github.com/sjatsh/go-scp v1.1.4 h1:9WsjvDkog1MjzdcbYEVJqPVVRJXO1U3+fz3LX+r1JiA=
+github.com/sjatsh/go-scp v1.1.4/go.mod h1:yUV0RIC35mtEY5Ws4zal7WNECVC/vpNozfgOut79A2M=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 go.opentelemetry.io/otel v0.19.0 h1:Lenfy7QHRXPZVsw/12CWpxX6d/JkrX8wrx2vO8G80Ng=

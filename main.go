@@ -463,6 +463,7 @@ func (s *Session) runCmd(cmdStr string) error {
 		if err != nil {
 			return err
 		}
+		scpClient := scp.NewSCP(client)
 
 		fileName := filepath.Base(strings.TrimSpace(cmdParams[1]))
 		localPath := "."
@@ -476,13 +477,13 @@ func (s *Session) runCmd(cmdStr string) error {
 
 			switch cmd {
 			case "down":
-				if err := scp.NewSCP(client).ReceiveFile(cmdParams[1], localPath); err != nil && err != io.EOF {
+				if err := scpClient.ReceiveFile(cmdParams[1], localPath); err != nil && err != io.EOF {
 					_ = s.sendMsg(fmt.Sprintf("\r\rdown %s error: %v   ", fileName, err))
 					return
 				}
 				_ = s.sendMsg(fmt.Sprintf("\r\rdown %s success   ", fileName))
 			case "up":
-				if err := scp.NewSCP(client).SendFile(cmdParams[1], localPath); err != nil && err != io.EOF {
+				if err := scpClient.SendFile(cmdParams[1], localPath); err != nil && err != io.EOF {
 					_ = s.sendMsg(fmt.Sprintf("\r\rup %s error: %v   ", fileName, err))
 					return
 				}
