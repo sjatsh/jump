@@ -76,7 +76,6 @@ type cmdEntity struct {
 const (
 	bash        = "-bash: %s: "
 	cmdNotFound = "command not found"
-	legalWords  = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789./_- "
 )
 
 var (
@@ -401,11 +400,7 @@ func (s *Session) writePiperStdin() error {
 						s.cmd.buf = make([]byte, 0, 128)
 					}
 				default:
-					for _, b := range buf[:n] {
-						if bytes.Contains([]byte(legalWords), []byte{b}) {
-							s.cmd.buf = append(s.cmd.buf, b)
-						}
-					}
+					s.cmd.buf = append(s.cmd.buf, buf[:n]...)
 				}
 			}
 		}
@@ -431,11 +426,7 @@ func (s *Session) readPiperStdout() error {
 						return err
 					}
 					if s.cmd.hasTab {
-						for _, b := range buf[:n] {
-							if bytes.Contains([]byte(legalWords), []byte{b}) {
-								s.cmd.buf = append(s.cmd.buf, b)
-							}
-						}
+						s.cmd.buf = append(s.cmd.buf, buf[:n]...)
 						s.cmd.hasTab = false
 					}
 
