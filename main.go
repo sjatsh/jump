@@ -173,10 +173,8 @@ func main() {
 		if strings.Contains(host.User, input) {
 			return true
 		}
-		if errNumber != nil {
-			if strings.Contains(host.HostName, input) {
-				return true
-			}
+		if strings.Contains(host.HostName, input) {
+			return true
 		}
 		if strings.Contains(host.Comment, input) {
 			return true
