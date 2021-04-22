@@ -26,6 +26,7 @@ import (
 )
 
 type Host struct {
+	hosts                           []string
 	Index                           int
 	Env                             string
 	Host                            string
@@ -147,8 +148,9 @@ func main() {
 		}
 
 		hostSlice := strings.Split(host.Host, "_")
-		if len(hostSlice) == 2 {
-			host.Env = hostSlice[1]
+		host.hosts = hostSlice
+		if len(hostSlice) > 1 {
+			host.Env = hostSlice[len(hostSlice)-1]
 		}
 		host.IdentityFile = strings.ReplaceAll(host.IdentityFile, "~", os.Getenv("HOME"))
 		hosts = append(hosts, host)
@@ -178,6 +180,11 @@ func main() {
 		}
 		if strings.Contains(host.Comment, input) {
 			return true
+		}
+		for _, h := range host.hosts {
+			if strings.Contains(h, input) {
+				return true
+			}
 		}
 		return false
 	}
